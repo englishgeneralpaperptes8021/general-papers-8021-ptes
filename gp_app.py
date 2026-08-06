@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import fitz  # PyMuPDF
 import gdown
+import time
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -13,7 +14,6 @@ from io import BytesIO
 # 1. SECRETS & CONFIGURATION
 # ==========================================
 
-# Secret password check with fallback default
 try:
     ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 except Exception:
@@ -112,10 +112,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # ==========================================
 
 def find_file_in_folder(folder_path, target_filename):
-    """Recursively searches for target_filename inside folder_path and any subdirectories.
-    
-    Returns the full path if found, or None if the file doesn't exist.
-    """
+    """Recursively searches for target_filename inside folder_path and subdirectories."""
     if not os.path.exists(folder_path):
         return None
         
@@ -127,10 +124,7 @@ def find_file_in_folder(folder_path, target_filename):
     return None
 
 def sync_from_drive():
-    """Syncs each Google Drive folder directly using its explicit Folder ID.
-    
-    Uses standard parameters fully compatible across all gdown library versions.
-    """
+    """Syncs Google Drive folders with pause intervals to avoid Google rate limiting."""
     success_count = 0
     total_folders = len(FOLDER_IDS)
     
@@ -139,20 +133,35 @@ def sync_from_drive():
 
     for idx, (local_folder, drive_id) in enumerate(FOLDER_IDS.items()):
         status_text.text(f"⏳ Syncing {local_folder} ({idx + 1}/{total_folders})...")
-        
-        # Ensure target folder exists
         os.makedirs(local_folder, exist_ok=True)
         
+        folder_url = f"https://drive.google.com/drive/folders/{drive_id}"
+        
+        # Brief pause between folder requests to satisfy Google Drive rate limits
+        if idx > 0:
+            time.sleep(1.5)
+
         try:
-            # Clean gdown call using core arguments only
             gdown.download_folder(
-                id=drive_id,
+                url=folder_url,
                 output=local_folder,
-                quiet=True
+                quiet=True,
+                use_cookies=False
             )
             success_count += 1
-        except Exception as e:
-            st.warning(f"⚠️ Could not sync {local_folder}: {e}")
+        except Exception as primary_error:
+            # Secondary retry attempt after a short delay
+            time.sleep(2.0)
+            try:
+                gdown.download_folder(
+                    id=drive_id,
+                    output=local_folder,
+                    quiet=True,
+                    use_cookies=False
+                )
+                success_count += 1
+            except Exception as retry_error:
+                st.warning(f"⚠️ Sync paused for {local_folder} due to Google Drive rate limits. Please try clicking Sync again in a moment.")
         
         progress_bar.progress((idx + 1) / total_folders)
 
@@ -171,7 +180,7 @@ def get_filename_pattern(month, year, paper_type, paper_code):
     return f"8021_{month_code}{short_year}_{paper_type}_{paper_code}"
 
 def search_pdfs(keyword_list, target_folders):
-    """Searches PDF contents across target folders and subfolders for matching keywords."""
+    """Searches PDF contents across target folders for matching keywords."""
     results = []
     for folder_path in target_folders:
         if not os.path.exists(folder_path): 
@@ -205,7 +214,7 @@ def render_page_image(pdf_path, page_num):
     return img_bytes
 
 def add_page_number_to_header(section):
-    """Adds dynamic Word page numbers to the document header."""
+    """Adds dynamic Word page numbers to document header."""
     header = section.header
     paragraph = header.paragraphs[0]
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -356,7 +365,7 @@ with tab3:
 
     col_q, col_m, col_i = st.columns(3)
     
-    # 1. Question Paper Column
+    # Question Paper Column
     with col_q:
         path_qp = find_file_in_folder(FOLDERS[f"{v_month} QP"], qp_name)
         if path_qp:
@@ -366,7 +375,7 @@ with tab3:
         else:
             st.error("Question Paper not found.")
 
-    # 2. Mark Scheme Column
+    # Mark Scheme Column
     with col_m:
         path_ms = find_file_in_folder(FOLDERS[f"{v_month} MS"], ms_name)
         if path_ms:
@@ -376,7 +385,7 @@ with tab3:
         else:
             st.error("Mark Scheme not found.")
 
-    # 3. Insert Paper Column
+    # Insert Paper Column
     with col_i:
         path_in = find_file_in_folder(FOLDERS["Inserts"], in_name)
         if path_in:
