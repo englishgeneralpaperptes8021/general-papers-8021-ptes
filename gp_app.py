@@ -185,10 +185,10 @@ with st.sidebar:
 # --- APP TABS ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Search Questions", 
-    "🎯 Search Marking Scheme", 
+    "🎯 Search Answers", 
     "📅 View&Save PYP", 
-    "📝 Merged Worksheet Download", 
-    "⚙️ Admin Control"
+    "📝 Handout Download", 
+    "⚙️ Admin"
 ])
 
 # --- TAB 1: SEARCH QUESTION PAPERS ---
