@@ -41,12 +41,12 @@ custom_css = """
 <style>
     /* Main Background */
     .stApp {
-        background-color: #0BC1F4 !important;
+        background-color: #FCBBE6 !important;
     }
     
     /* Sidebar Background */
     [data-testid="stSidebar"] {
-        background-color: #099EC8 !important;
+        background-color: #FA8FD6 !important;
     }
 
     /* Text Formatting Rules */
@@ -57,8 +57,8 @@ custom_css = """
     /* Input Controls */
     div[data-baseweb="input"] > div, 
     div[data-baseweb="select"] > div {
-        background-color: #63F8BF !important;
-        border-color: #057047 !important;
+        background-color: #FEE7F6 !important;
+        border-color: #F527B0 !important;
     }
     
     input {
@@ -167,8 +167,8 @@ if 'search_results_ms' not in st.session_state:
     st.session_state.search_results_ms = []
 
 # --- SIDEBAR & HEADER ---
-st.title("PUSAT TINGKATAN ENAM SENGKURONG")
-st.title("📚 8021 General Paper PYP Handout Platform")
+st.title("PTE SENGKURONG")
+st.title("📚 8021 PYP General Paper Hub")
 
 with st.sidebar:
     st.header("Cloud Controls")
@@ -184,16 +184,16 @@ with st.sidebar:
 
 # --- APP TABS ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🔍 Search QP via Keyword", 
-    "🎯 Search MS via Keyword", 
-    "📅 View PYP Question & Answer", 
-    "📝 Export Merged Handout", 
+    "🔍 Search Questions", 
+    "🎯 Search Marking Scheme", 
+    "📅 View&Save PYP", 
+    "📝 Merged Worksheet Download", 
     "⚙️ Admin Control"
 ])
 
 # --- TAB 1: SEARCH QUESTION PAPERS ---
 with tab1:
-    st.header("Search Question Papers (QP Only)")
+    st.header("Search Question Papers only")
     col_input, col_reset = st.columns([4, 1])
     with col_input:
         keywords_qp = st.text_input("Enter keywords (e.g., 'technology')", key="input_qp")
@@ -231,7 +231,7 @@ with tab1:
 
 # --- TAB 2: SEARCH MARK SCHEMES ---
 with tab2:
-    st.header("Search Mark Schemes (MS Only)")
+    st.header("Search Mark Schemes Only")
     col_input, col_reset = st.columns([4, 1])
     with col_input:
         keywords_ms = st.text_input("Enter keywords (e.g., 'evaluation')", key="input_ms")
