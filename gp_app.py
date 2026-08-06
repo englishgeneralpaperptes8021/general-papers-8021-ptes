@@ -9,7 +9,11 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from io import BytesIO
 
-# --- SECRETS & CONFIGURATION ---
+# ==========================================
+# 1. SECRETS & CONFIGURATION
+# ==========================================
+
+# Secret password check with fallback default
 try:
     ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 except Exception:
@@ -37,12 +41,14 @@ QP_FOLDERS = [FOLDERS["June QP"], FOLDERS["Nov QP"]]
 MS_FOLDERS = [FOLDERS["June MS"], FOLDERS["Nov MS"]]
 IN_FOLDERS = [FOLDERS["Inserts"]]
 
-# Ensure local directories exist
+# Ensure local directories exist upon startup
 for folder_path in FOLDER_IDS.keys():
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
+    os.makedirs(folder_path, exist_ok=True)
 
-# --- APP SETUP & STYLING ---
+# ==========================================
+# 2. APP SETUP & STYLING
+# ==========================================
+
 st.set_page_config(page_title="8021 General Paper Handout Builder", layout="wide")
 
 custom_css = """
@@ -101,7 +107,9 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- HELPER FUNCTIONS ---
+# ==========================================
+# 3. HELPER FUNCTIONS
+# ==========================================
 
 def find_file_in_folder(folder_path, target_filename):
     """Recursively searches for target_filename inside folder_path and any subdirectories.
@@ -119,7 +127,10 @@ def find_file_in_folder(folder_path, target_filename):
     return None
 
 def sync_from_drive():
-    """Syncs each Google Drive folder directly using its explicit Folder ID."""
+    """Syncs each Google Drive folder directly using its explicit Folder ID.
+    
+    Uses standard parameters fully compatible across all gdown library versions.
+    """
     success_count = 0
     total_folders = len(FOLDER_IDS)
     
@@ -128,13 +139,16 @@ def sync_from_drive():
 
     for idx, (local_folder, drive_id) in enumerate(FOLDER_IDS.items()):
         status_text.text(f"⏳ Syncing {local_folder} ({idx + 1}/{total_folders})...")
+        
+        # Ensure target folder exists
+        os.makedirs(local_folder, exist_ok=True)
+        
         try:
+            # Clean gdown call using core arguments only
             gdown.download_folder(
                 id=drive_id,
                 output=local_folder,
-                quiet=True,
-                remaining_ok=True,
-                use_cookies=False
+                quiet=True
             )
             success_count += 1
         except Exception as e:
@@ -151,20 +165,20 @@ def sync_from_drive():
         st.info(f"🔄 Sync complete: {success_count}/{total_folders} folders updated.")
 
 def get_filename_pattern(month, year, paper_type, paper_code):
-    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w25_in_21)."""
+    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w24_in_21)."""
     short_year = year[-2:]
     month_code = 's' if month == "June" else 'w'
     return f"8021_{month_code}{short_year}_{paper_type}_{paper_code}"
 
 def search_pdfs(keyword_list, target_folders):
-    """Searches PDF contents across target folders for matching keywords."""
+    """Searches PDF contents across target folders and subfolders for matching keywords."""
     results = []
     for folder_path in target_folders:
         if not os.path.exists(folder_path): 
             continue
         for root, dirs, files in os.walk(folder_path):
             for file in files:
-                if file.endswith(".pdf"):
+                if file.lower().endswith(".pdf"):
                     pdf_path = os.path.join(root, file)
                     try:
                         doc = fitz.open(pdf_path)
@@ -191,7 +205,7 @@ def render_page_image(pdf_path, page_num):
     return img_bytes
 
 def add_page_number_to_header(section):
-    """Adds native dynamic Word page numbers to document header."""
+    """Adds dynamic Word page numbers to the document header."""
     header = section.header
     paragraph = header.paragraphs[0]
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -207,7 +221,10 @@ def add_page_number_to_header(section):
     run._r.append(fldChar2)
     run._r.append(fldChar3)
 
-# --- SESSION STATE INITIALIZATION ---
+# ==========================================
+# 4. SESSION STATE INITIALIZATION
+# ==========================================
+
 if 'handout_basket' not in st.session_state:
     st.session_state.handout_basket = []
 if 'search_results_qp' not in st.session_state:
@@ -215,7 +232,10 @@ if 'search_results_qp' not in st.session_state:
 if 'search_results_ms' not in st.session_state:
     st.session_state.search_results_ms = []
 
-# --- SIDEBAR & HEADER ---
+# ==========================================
+# 5. SIDEBAR & HEADER
+# ==========================================
+
 st.title("PTE SENGKURONG")
 st.title("📚 8021 PYP General Paper Hub")
 
@@ -231,7 +251,10 @@ with st.sidebar:
     st.markdown("### 🛒 Basket Summary")
     st.metric(label="Total Pages Selected", value=f"{basket_count} page(s)")
 
-# --- APP TABS ---
+# ==========================================
+# 6. APP TABS
+# ==========================================
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Search Questions", 
     "🎯 Search Answers", 
@@ -333,7 +356,7 @@ with tab3:
 
     col_q, col_m, col_i = st.columns(3)
     
-    # Question Paper Column
+    # 1. Question Paper Column
     with col_q:
         path_qp = find_file_in_folder(FOLDERS[f"{v_month} QP"], qp_name)
         if path_qp:
@@ -343,7 +366,7 @@ with tab3:
         else:
             st.error("Question Paper not found.")
 
-    # Mark Scheme Column
+    # 2. Mark Scheme Column
     with col_m:
         path_ms = find_file_in_folder(FOLDERS[f"{v_month} MS"], ms_name)
         if path_ms:
@@ -353,7 +376,7 @@ with tab3:
         else:
             st.error("Mark Scheme not found.")
 
-    # Insert Paper Column
+    # 3. Insert Paper Column
     with col_i:
         path_in = find_file_in_folder(FOLDERS["Inserts"], in_name)
         if path_in:
@@ -438,14 +461,17 @@ with tab5:
             if os.path.exists(folder):
                 pdf_files = []
                 for root, dirs, files in os.walk(folder):
-                    pdf_files.extend([f for f in files if f.endswith('.pdf')])
+                    pdf_files.extend([f for f in files if f.lower().endswith('.pdf')])
                 st.write(f"✅ **{label}:** {len(pdf_files)} files synced")
             else:
                 st.error(f"❌ **{label}:** Folder missing!")
     elif pwd:
         st.error("Incorrect Password. Access Denied.")
 
-# --- FOOTER ---
+# ==========================================
+# 7. FOOTER
+# ==========================================
+
 st.markdown("---")
 st.markdown(
     """
