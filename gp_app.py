@@ -19,7 +19,7 @@ try:
 except Exception:
     ADMIN_PASSWORD = "8021Admin"
 
-# Direct mapping of local folder paths to their respective Google Drive Folder IDs
+# Mapping of local folder paths to their respective Google Drive Folder IDs
 FOLDER_IDS = {
     "8021_June_ms": "1NbH3B-4lBT_LXxMIeucnaFrclrEMkIVE",
     "8021_June_qp": "1vwHyNqWWGMdPh5_hDcMr0GGhY84ih84z",
@@ -28,7 +28,7 @@ FOLDER_IDS = {
     "8021_NovJune_in": "1LQjc9vzlIYqGcFm5DVErQZM1TuMTTM7v"
 }
 
-# Mapping folder categories for the application UI
+# Mapping folder categories for the UI
 FOLDERS = {
     "June QP": "8021_June_qp",
     "Nov QP": "8021_Nov_qp",
@@ -41,7 +41,7 @@ QP_FOLDERS = [FOLDERS["June QP"], FOLDERS["Nov QP"]]
 MS_FOLDERS = [FOLDERS["June MS"], FOLDERS["Nov MS"]]
 IN_FOLDERS = [FOLDERS["Inserts"]]
 
-# Ensure local directories exist upon startup
+# Safe directory creation (prevents FileExistsError)
 for folder_path in FOLDER_IDS.keys():
     os.makedirs(folder_path, exist_ok=True)
 
@@ -124,7 +124,7 @@ def find_file_in_folder(folder_path, target_filename):
     return None
 
 def sync_from_drive():
-    """Syncs Google Drive folders with pause intervals to avoid Google rate limiting."""
+    """Syncs Google Drive folders with timed pauses to avoid Google rate limiting."""
     success_count = 0
     total_folders = len(FOLDER_IDS)
     
@@ -137,9 +137,9 @@ def sync_from_drive():
         
         folder_url = f"https://drive.google.com/drive/folders/{drive_id}"
         
-        # Brief pause between folder requests to satisfy Google Drive rate limits
+        # Pause between folder downloads to prevent Google HTTP 429 rate limit errors
         if idx > 0:
-            time.sleep(1.5)
+            time.sleep(2.0)
 
         try:
             gdown.download_folder(
@@ -149,9 +149,9 @@ def sync_from_drive():
                 use_cookies=False
             )
             success_count += 1
-        except Exception as primary_error:
-            # Secondary retry attempt after a short delay
-            time.sleep(2.0)
+        except Exception:
+            # Cool down delay before retry
+            time.sleep(3.0)
             try:
                 gdown.download_folder(
                     id=drive_id,
@@ -160,7 +160,7 @@ def sync_from_drive():
                     use_cookies=False
                 )
                 success_count += 1
-            except Exception as retry_error:
+            except Exception:
                 st.warning(f"⚠️ Sync paused for {local_folder} due to Google Drive rate limits. Please try clicking Sync again in a moment.")
         
         progress_bar.progress((idx + 1) / total_folders)
@@ -299,7 +299,7 @@ with tab1:
                 col_preview, col_actions = st.columns([3, 2])
                 with col_preview:
                     img_data = render_page_image(item['path'], item['page'])
-                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", use_container_width=True)
+                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", width="stretch")
                 with col_actions:
                     st.subheader("Actions")
                     if st.button("➕ Add to Handout Basket", key=f"add_qp_{idx}"):
@@ -337,7 +337,7 @@ with tab2:
                 col_preview, col_actions = st.columns([3, 2])
                 with col_preview:
                     img_data = render_page_image(item['path'], item['page'])
-                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", use_container_width=True)
+                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", width="stretch")
                 with col_actions:
                     st.subheader("Actions")
                     if st.button("➕ Add to Handout Basket", key=f"add_ms_{idx}"):
@@ -501,4 +501,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
