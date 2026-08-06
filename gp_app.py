@@ -102,6 +102,22 @@ custom_css = """
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
+
+def find_file_in_folder(folder_path, target_filename):
+    """Recursively searches for target_filename inside folder_path and any subdirectories.
+    
+    Returns the full path if found, or None if the file doesn't exist.
+    """
+    if not os.path.exists(folder_path):
+        return None
+        
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower() == target_filename.lower():
+                return os.path.join(root, file)
+                
+    return None
+
 def sync_from_drive():
     """Syncs each Google Drive folder directly using its explicit Folder ID."""
     success_count = 0
@@ -113,7 +129,6 @@ def sync_from_drive():
     for idx, (local_folder, drive_id) in enumerate(FOLDER_IDS.items()):
         status_text.text(f"⏳ Syncing {local_folder} ({idx + 1}/{total_folders})...")
         try:
-            # Download folder contents directly into the local target directory
             gdown.download_folder(
                 id=drive_id,
                 output=local_folder,
@@ -147,21 +162,23 @@ def search_pdfs(keyword_list, target_folders):
     for folder_path in target_folders:
         if not os.path.exists(folder_path): 
             continue
-        for file in os.listdir(folder_path):
-            if file.endswith(".pdf"):
-                try:
-                    doc = fitz.open(os.path.join(folder_path, file))
-                    for page_num in range(len(doc)):
-                        text = doc[page_num].get_text().lower()
-                        if all(k.lower() in text for k in keyword_list):
-                            results.append({
-                                "file": file, 
-                                "page": page_num, 
-                                "path": os.path.join(folder_path, file)
-                            })
-                    doc.close()
-                except Exception:
-                    continue
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                if file.endswith(".pdf"):
+                    pdf_path = os.path.join(root, file)
+                    try:
+                        doc = fitz.open(pdf_path)
+                        for page_num in range(len(doc)):
+                            text = doc[page_num].get_text().lower()
+                            if all(k.lower() in text for k in keyword_list):
+                                results.append({
+                                    "file": file, 
+                                    "page": page_num, 
+                                    "path": pdf_path
+                                })
+                        doc.close()
+                    except Exception:
+                        continue
     return results
 
 def render_page_image(pdf_path, page_num):
@@ -316,7 +333,7 @@ with tab3:
 
     col_q, col_m, col_i = st.columns(3)
     
-    # 1. Question Paper Column
+    # Question Paper Column
     with col_q:
         path_qp = find_file_in_folder(FOLDERS[f"{v_month} QP"], qp_name)
         if path_qp:
@@ -326,7 +343,7 @@ with tab3:
         else:
             st.error("Question Paper not found.")
 
-    # 2. Mark Scheme Column
+    # Mark Scheme Column
     with col_m:
         path_ms = find_file_in_folder(FOLDERS[f"{v_month} MS"], ms_name)
         if path_ms:
@@ -336,7 +353,7 @@ with tab3:
         else:
             st.error("Mark Scheme not found.")
 
-    # 3. Insert Paper Column
+    # Insert Paper Column
     with col_i:
         path_in = find_file_in_folder(FOLDERS["Inserts"], in_name)
         if path_in:
@@ -345,7 +362,7 @@ with tab3:
                 st.download_button("Download Full Insert", f, file_name=in_name, key="dl_in_tab3")
         else:
             st.error("Insert Paper not found.")
-###################################################################################
+
 # --- TAB 4: BASKET & EXPORT ---
 with tab4:
     st.header("Worksheet Export")
@@ -419,8 +436,10 @@ with tab5:
         st.markdown("### 📊 Live System Status")
         for label, folder in FOLDERS.items():
             if os.path.exists(folder):
-                file_count = len([f for f in os.listdir(folder) if f.endswith('.pdf')])
-                st.write(f"✅ **{label}:** {file_count} files synced")
+                pdf_files = []
+                for root, dirs, files in os.walk(folder):
+                    pdf_files.extend([f for f in files if f.endswith('.pdf')])
+                st.write(f"✅ **{label}:** {len(pdf_files)} files synced")
             else:
                 st.error(f"❌ **{label}:** Folder missing!")
     elif pwd:
