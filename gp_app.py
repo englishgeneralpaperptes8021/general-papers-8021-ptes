@@ -316,33 +316,36 @@ with tab3:
 
     col_q, col_m, col_i = st.columns(3)
     
+    # 1. Question Paper Column
     with col_q:
-        path_qp = os.path.join(FOLDERS[f"{v_month} QP"], qp_name)
-        if os.path.exists(path_qp):
+        path_qp = find_file_in_folder(FOLDERS[f"{v_month} QP"], qp_name)
+        if path_qp:
             st.success(f"Found QP: {qp_name}")
             with open(path_qp, "rb") as f:
                 st.download_button("Download Full QP", f, file_name=qp_name, key="dl_qp_tab3")
         else:
             st.error("Question Paper not found.")
 
+    # 2. Mark Scheme Column
     with col_m:
-        path_ms = os.path.join(FOLDERS[f"{v_month} MS"], ms_name)
-        if os.path.exists(path_ms):
+        path_ms = find_file_in_folder(FOLDERS[f"{v_month} MS"], ms_name)
+        if path_ms:
             st.success(f"Found MS: {ms_name}")
             with open(path_ms, "rb") as f:
                 st.download_button("Download Full MS", f, file_name=ms_name, key="dl_ms_tab3")
         else:
             st.error("Mark Scheme not found.")
 
+    # 3. Insert Paper Column
     with col_i:
-        path_in = os.path.join(FOLDERS["Inserts"], in_name)
-        if os.path.exists(path_in):
+        path_in = find_file_in_folder(FOLDERS["Inserts"], in_name)
+        if path_in:
             st.success(f"Found Insert: {in_name}")
             with open(path_in, "rb") as f:
                 st.download_button("Download Full Insert", f, file_name=in_name, key="dl_in_tab3")
         else:
             st.error("Insert Paper not found.")
-
+###################################################################################
 # --- TAB 4: BASKET & EXPORT ---
 with tab4:
     st.header("Worksheet Export")
