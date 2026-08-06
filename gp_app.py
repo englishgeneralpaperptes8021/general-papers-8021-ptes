@@ -18,16 +18,18 @@ except Exception:
 # Updated with your PYPMaterials8021 Google Drive folder ID
 GD_FOLDER_ID = "11XF_9ZBu95qMcVENnEWy5P9a-BqbloA6"
 
-# Directory names matching your Google Drive structure
+# Directory names matching your Google Drive structure (Added Insert folder)
 FOLDERS = {
     "June QP": "8021_June_qp",
     "Nov QP": "8021_Nov_qp",
     "June MS": "8021_June_ms",
-    "Nov MS": "8021_Nov_ms"
+    "Nov MS": "8021_Nov_ms",
+    "Inserts": "8021_NovJune_in"
 }
 
 QP_FOLDERS = [FOLDERS["June QP"], FOLDERS["Nov QP"]]
 MS_FOLDERS = [FOLDERS["June MS"], FOLDERS["Nov MS"]]
+IN_FOLDERS = [FOLDERS["Inserts"]]
 
 # Ensure local directories exist for synced files
 for folder in FOLDERS.values():
@@ -104,7 +106,7 @@ def sync_from_drive():
         st.error(f"Sync Error: {e}")
 
 def get_filename_pattern(month, year, paper_type, paper_code):
-    """Formats Cambridge PDF file patterns for 8021."""
+    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w25_in_21)."""
     short_year = year[-2:]
     month_code = 's' if month == "June" else 'w'
     return f"8021_{month_code}{short_year}_{paper_type}_{paper_code}"
@@ -267,7 +269,7 @@ with tab2:
                     with open(item['path'], "rb") as pdf_file:
                         st.download_button("📥 Download Full PDF", pdf_file, file_name=item['file'], mime="application/pdf", key=f"dl_ms_{idx}")
 
-# --- TAB 3: QUICK VIEW PAPERS ---
+# --- TAB 3: QUICK VIEW PAPERS (UPDATED FOR INSERTS) ---
 with tab3:
     st.header("Quick Download: Full Papers")
     c1, c2, c3 = st.columns(3)
@@ -280,17 +282,21 @@ with tab3:
 
     qp_name = get_filename_pattern(v_month, v_year, "qp", v_paper) + ".pdf"
     ms_name = get_filename_pattern(v_month, v_year, "ms", v_paper) + ".pdf"
+    in_name = get_filename_pattern(v_month, v_year, "in", v_paper) + ".pdf"
 
-    col_q, col_m = st.columns(2)
+    col_q, col_m, col_i = st.columns(3)
+    
+    # 1. Question Paper Column
     with col_q:
-        path = os.path.join(FOLDERS[f"{v_month} QP"], qp_name)
-        if os.path.exists(path):
+        path_qp = os.path.join(FOLDERS[f"{v_month} QP"], qp_name)
+        if os.path.exists(path_qp):
             st.success(f"Found QP: {qp_name}")
-            with open(path, "rb") as f:
+            with open(path_qp, "rb") as f:
                 st.download_button("Download Full QP", f, file_name=qp_name, key="dl_qp_tab3")
         else:
             st.error("Question Paper not found.")
 
+    # 2. Mark Scheme Column
     with col_m:
         path_ms = os.path.join(FOLDERS[f"{v_month} MS"], ms_name)
         if os.path.exists(path_ms):
@@ -299,6 +305,16 @@ with tab3:
                 st.download_button("Download Full MS", f, file_name=ms_name, key="dl_ms_tab3")
         else:
             st.error("Mark Scheme not found.")
+
+    # 3. Insert Paper Column
+    with col_i:
+        path_in = os.path.join(FOLDERS["Inserts"], in_name)
+        if os.path.exists(path_in):
+            st.success(f"Found Insert: {in_name}")
+            with open(path_in, "rb") as f:
+                st.download_button("Download Full Insert", f, file_name=in_name, key="dl_in_tab3")
+        else:
+            st.error("Insert Paper not found.")
 
 # --- TAB 4: BASKET & EXPORT ---
 with tab4:
