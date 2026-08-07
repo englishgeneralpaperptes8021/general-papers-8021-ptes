@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import fitz  # PyMuPDF
 import gdown
+import time
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -9,17 +10,25 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from io import BytesIO
 
-# --- SECRETS & CONFIGURATION ---
+# ==========================================
+# 1. SECRETS & CONFIGURATION
+# ==========================================
+
 try:
     ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 except Exception:
     ADMIN_PASSWORD = "8021Admin"
 
-# Updated with your PYPMaterials8021 Google Drive folder ID
-GD_FOLDER_ID = "11XF_9ZBu95qMcVENnEWy5P9a-BqbloA6"
-#any one with the link 11XF_9ZBu95qMcVENnEWy5P9a-BqbloA6
+# Mapping of local folder paths to their respective Google Drive Folder IDs
+FOLDER_IDS = {
+    "8021_June_ms": "1NbH3B-4lBT_LXxMIeucnaFrclrEMkIVE",
+    "8021_June_qp": "1vwHyNqWWGMdPh5_hDcMr0GGhY84ih84z",
+    "8021_Nov_ms": "14GdohfMLKd1HL0akzVlNWCHKA9kcI9IF",
+    "8021_Nov_qp": "1lUVWroAm0p9SQNgvQA-hRLNydg8-IPnB",
+    "8021_NovJune_in": "1LQjc9vzlIYqGcFm5DVErQZM1TuMTTM7v"
+}
 
-# Directory names matching your Google Drive structure (Added Insert folder)
+# Mapping folder categories for the UI
 FOLDERS = {
     "June QP": "8021_June_qp",
     "Nov QP": "8021_Nov_qp",
@@ -32,12 +41,14 @@ QP_FOLDERS = [FOLDERS["June QP"], FOLDERS["Nov QP"]]
 MS_FOLDERS = [FOLDERS["June MS"], FOLDERS["Nov MS"]]
 IN_FOLDERS = [FOLDERS["Inserts"]]
 
-# Ensure local directories exist for synced files
-for folder in FOLDERS.values():
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+# Safe directory creation (prevents FileExistsError)
+for folder_path in FOLDER_IDS.keys():
+    os.makedirs(folder_path, exist_ok=True)
 
-# --- APP SETUP & STYLING ---
+# ==========================================
+# 2. APP SETUP & STYLING
+# ==========================================
+
 st.set_page_config(page_title="8021 General Paper Handout Builder", layout="wide")
 
 custom_css = """
@@ -96,18 +107,74 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- HELPER FUNCTIONS ---
+# ==========================================
+# 3. HELPER FUNCTIONS
+# ==========================================
+
+def find_file_in_folder(folder_path, target_filename):
+    """Recursively searches for target_filename inside folder_path and subdirectories."""
+    if not os.path.exists(folder_path):
+        return None
+        
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower() == target_filename.lower():
+                return os.path.join(root, file)
+                
+    return None
+
 def sync_from_drive():
-    """Downloads files from Google Drive into the local Streamlit environment."""
-    try:
-        with st.spinner("🔄 Syncing with Google Drive..."):
-            gdown.download_folder(id=GD_FOLDER_ID, output=".", quiet=True)
-        st.success("✅ Library Updated from Google Drive!")
-    except Exception as e:
-        st.error(f"Sync Error: {e}")
+    """Syncs Google Drive folders with timed pauses to avoid Google rate limiting."""
+    success_count = 0
+    total_folders = len(FOLDER_IDS)
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for idx, (local_folder, drive_id) in enumerate(FOLDER_IDS.items()):
+        status_text.text(f"⏳ Syncing {local_folder} ({idx + 1}/{total_folders})...")
+        os.makedirs(local_folder, exist_ok=True)
+        
+        folder_url = f"https://drive.google.com/drive/folders/{drive_id}"
+        
+        # Pause between folder downloads to prevent Google HTTP 429 rate limit errors
+        if idx > 0:
+            time.sleep(2.0)
+
+        try:
+            gdown.download_folder(
+                url=folder_url,
+                output=local_folder,
+                quiet=True,
+                use_cookies=False
+            )
+            success_count += 1
+        except Exception:
+            # Cool down delay before retry
+            time.sleep(3.0)
+            try:
+                gdown.download_folder(
+                    id=drive_id,
+                    output=local_folder,
+                    quiet=True,
+                    use_cookies=False
+                )
+                success_count += 1
+            except Exception:
+                st.warning(f"⚠️ Sync paused for {local_folder} due to Google Drive rate limits. Please try clicking Sync again in a moment.")
+        
+        progress_bar.progress((idx + 1) / total_folders)
+
+    status_text.empty()
+    progress_bar.empty()
+
+    if success_count == total_folders:
+        st.success("✅ All folders successfully synced from Google Drive!")
+    else:
+        st.info(f"🔄 Sync complete: {success_count}/{total_folders} folders updated.")
 
 def get_filename_pattern(month, year, paper_type, paper_code):
-    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w25_in_21)."""
+    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w24_in_21)."""
     short_year = year[-2:]
     month_code = 's' if month == "June" else 'w'
     return f"8021_{month_code}{short_year}_{paper_type}_{paper_code}"
@@ -118,21 +185,23 @@ def search_pdfs(keyword_list, target_folders):
     for folder_path in target_folders:
         if not os.path.exists(folder_path): 
             continue
-        for file in os.listdir(folder_path):
-            if file.endswith(".pdf"):
-                try:
-                    doc = fitz.open(os.path.join(folder_path, file))
-                    for page_num in range(len(doc)):
-                        text = doc[page_num].get_text().lower()
-                        if all(k.lower() in text for k in keyword_list):
-                            results.append({
-                                "file": file, 
-                                "page": page_num, 
-                                "path": os.path.join(folder_path, file)
-                            })
-                    doc.close()
-                except Exception:
-                    continue
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith(".pdf"):
+                    pdf_path = os.path.join(root, file)
+                    try:
+                        doc = fitz.open(pdf_path)
+                        for page_num in range(len(doc)):
+                            text = doc[page_num].get_text().lower()
+                            if all(k.lower() in text for k in keyword_list):
+                                results.append({
+                                    "file": file, 
+                                    "page": page_num, 
+                                    "path": pdf_path
+                                })
+                        doc.close()
+                    except Exception:
+                        continue
     return results
 
 def render_page_image(pdf_path, page_num):
@@ -145,7 +214,7 @@ def render_page_image(pdf_path, page_num):
     return img_bytes
 
 def add_page_number_to_header(section):
-    """Adds native dynamic Word page numbers to document header."""
+    """Adds dynamic Word page numbers to document header."""
     header = section.header
     paragraph = header.paragraphs[0]
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -161,7 +230,10 @@ def add_page_number_to_header(section):
     run._r.append(fldChar2)
     run._r.append(fldChar3)
 
-# --- SESSION STATE INITIALIZATION ---
+# ==========================================
+# 4. SESSION STATE INITIALIZATION
+# ==========================================
+
 if 'handout_basket' not in st.session_state:
     st.session_state.handout_basket = []
 if 'search_results_qp' not in st.session_state:
@@ -169,7 +241,10 @@ if 'search_results_qp' not in st.session_state:
 if 'search_results_ms' not in st.session_state:
     st.session_state.search_results_ms = []
 
-# --- SIDEBAR & HEADER ---
+# ==========================================
+# 5. SIDEBAR & HEADER
+# ==========================================
+
 st.title("PTE SENGKURONG")
 st.title("📚 8021 PYP General Paper Hub")
 
@@ -185,7 +260,10 @@ with st.sidebar:
     st.markdown("### 🛒 Basket Summary")
     st.metric(label="Total Pages Selected", value=f"{basket_count} page(s)")
 
-# --- APP TABS ---
+# ==========================================
+# 6. APP TABS
+# ==========================================
+
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🔍 Search Questions", 
     "🎯 Search Answers", 
@@ -221,7 +299,7 @@ with tab1:
                 col_preview, col_actions = st.columns([3, 2])
                 with col_preview:
                     img_data = render_page_image(item['path'], item['page'])
-                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", use_container_width=True)
+                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", width="stretch")
                 with col_actions:
                     st.subheader("Actions")
                     if st.button("➕ Add to Handout Basket", key=f"add_qp_{idx}"):
@@ -259,7 +337,7 @@ with tab2:
                 col_preview, col_actions = st.columns([3, 2])
                 with col_preview:
                     img_data = render_page_image(item['path'], item['page'])
-                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", use_container_width=True)
+                    st.image(img_data, caption=f"Preview of Page {item['page'] + 1}", width="stretch")
                 with col_actions:
                     st.subheader("Actions")
                     if st.button("➕ Add to Handout Basket", key=f"add_ms_{idx}"):
@@ -270,7 +348,7 @@ with tab2:
                     with open(item['path'], "rb") as pdf_file:
                         st.download_button("📥 Download Full PDF", pdf_file, file_name=item['file'], mime="application/pdf", key=f"dl_ms_{idx}")
 
-# --- TAB 3: QUICK VIEW PAPERS (UPDATED FOR INSERTS) ---
+# --- TAB 3: QUICK VIEW PAPERS ---
 with tab3:
     st.header("Quick Download: Full Papers")
     c1, c2, c3 = st.columns(3)
@@ -287,30 +365,30 @@ with tab3:
 
     col_q, col_m, col_i = st.columns(3)
     
-    # 1. Question Paper Column
+    # Question Paper Column
     with col_q:
-        path_qp = os.path.join(FOLDERS[f"{v_month} QP"], qp_name)
-        if os.path.exists(path_qp):
+        path_qp = find_file_in_folder(FOLDERS[f"{v_month} QP"], qp_name)
+        if path_qp:
             st.success(f"Found QP: {qp_name}")
             with open(path_qp, "rb") as f:
                 st.download_button("Download Full QP", f, file_name=qp_name, key="dl_qp_tab3")
         else:
             st.error("Question Paper not found.")
 
-    # 2. Mark Scheme Column
+    # Mark Scheme Column
     with col_m:
-        path_ms = os.path.join(FOLDERS[f"{v_month} MS"], ms_name)
-        if os.path.exists(path_ms):
+        path_ms = find_file_in_folder(FOLDERS[f"{v_month} MS"], ms_name)
+        if path_ms:
             st.success(f"Found MS: {ms_name}")
             with open(path_ms, "rb") as f:
                 st.download_button("Download Full MS", f, file_name=ms_name, key="dl_ms_tab3")
         else:
             st.error("Mark Scheme not found.")
 
-    # 3. Insert Paper Column
+    # Insert Paper Column
     with col_i:
-        path_in = os.path.join(FOLDERS["Inserts"], in_name)
-        if os.path.exists(path_in):
+        path_in = find_file_in_folder(FOLDERS["Inserts"], in_name)
+        if path_in:
             st.success(f"Found Insert: {in_name}")
             with open(path_in, "rb") as f:
                 st.download_button("Download Full Insert", f, file_name=in_name, key="dl_in_tab3")
@@ -387,24 +465,22 @@ with tab5:
     pwd = st.text_input("Enter Admin Password to access controls", type="password", key="admin_pwd")
     if pwd == ADMIN_PASSWORD:
         st.success("Welcome, Admin.")
-        st.markdown("""
-        ### 📂 Library Management
-        To add or remove papers permanently, please use the Google Drive portal. 
-        Changes will reflect here after clicking **Sync** in the sidebar.
-        """)
-        st.link_button("Go to Google Drive Library", f"https://drive.google.com/drive/folders/{GD_FOLDER_ID}")
-        st.divider()
-        st.subheader("📊 Live System Status")
+        st.markdown("### 📊 Live System Status")
         for label, folder in FOLDERS.items():
             if os.path.exists(folder):
-                file_count = len([f for f in os.listdir(folder) if f.endswith('.pdf')])
-                st.write(f"✅ **{label}:** {file_count} files synced")
+                pdf_files = []
+                for root, dirs, files in os.walk(folder):
+                    pdf_files.extend([f for f in files if f.lower().endswith('.pdf')])
+                st.write(f"✅ **{label}:** {len(pdf_files)} files synced")
             else:
                 st.error(f"❌ **{label}:** Folder missing!")
     elif pwd:
         st.error("Incorrect Password. Access Denied.")
 
-# --- FOOTER ---
+# ==========================================
+# 7. FOOTER
+# ==========================================
+
 st.markdown("---")
 st.markdown(
     """
@@ -425,4 +501,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
