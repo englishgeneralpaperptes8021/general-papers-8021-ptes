@@ -28,7 +28,7 @@ FOLDER_IDS = {
     "8021_June_ms": "1NbH3B-4lBT_LXxMIeucnaFrclrEMkIVE",
     "8021_June_qp": "1vwHyNqWWGMdPh5_hDcMr0GGhY84ih84z",
     "8021_Nov_ms": "14GdohfMLKd1HL0akzVlNWCHKA9kcI9IF",
-    "8021_Nov_qp": "1lUVWroAm0p9NgvQA-hRLNydg8-IPnB",
+    "8021_Nov_qp": "1lUVWroAm0p9SQNgvQA-hRLNydg8-IPnB",
     "8021_NovJune_in": "1LQjc9vzlIYqGcFm5DVErQZM1TuMTTM7v"
 }
 
