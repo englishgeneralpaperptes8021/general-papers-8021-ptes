@@ -1,4 +1,5 @@
 streamlit
 PyMuPDF
-gdown
 python-docx
+google-api-python-client
+google-auth
