@@ -45,7 +45,7 @@ QP_FOLDERS = [FOLDERS["June QP"], FOLDERS["Nov QP"]]
 MS_FOLDERS = [FOLDERS["June MS"], FOLDERS["Nov MS"]]
 IN_FOLDERS = [FOLDERS["Inserts"]]
 
-# Safe directory creation (prevents FileExistsError)
+# Create directories locally if they don't exist
 for folder_path in FOLDER_IDS.keys():
     os.makedirs(folder_path, exist_ok=True)
 
@@ -112,12 +112,21 @@ custom_css = """
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # ==========================================
-# 3. GOOGLE DRIVE OFFICIAL API FUNCTIONS
+# 3. GOOGLE DRIVE SERVICE ACCOUNT AUTH & SYNC
 # ==========================================
 
 def get_drive_service():
-    """Builds and returns an authorized Google Drive API client using Streamlit Secrets."""
-    creds_dict = st.secrets["gcp_service_account"]
+    """
+    Constructs an authenticated Google Drive API client 
+    using the JSON credentials stored in Streamlit Secrets.
+    """
+    # Convert st.secrets dictionary proxy to a standard dict
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    
+    # Critical Fix: Replace literal escaped string '\\n' with true newlines
+    if "private_key" in creds_dict:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
     credentials = service_account.Credentials.from_service_account_info(
         creds_dict,
         scopes=["https://www.googleapis.com/auth/drive.readonly"]
@@ -127,8 +136,8 @@ def get_drive_service():
 
 def sync_from_drive():
     """
-    Syncs Google Drive folders directly via official Google Drive API v3.
-    This bypasses rate-limiting/429 web scraping restrictions.
+    Downloads all PDF files from shared Google Drive folders 
+    using official Service Account API calls.
     """
     try:
         service = get_drive_service()
@@ -147,7 +156,7 @@ def sync_from_drive():
         os.makedirs(local_folder, exist_ok=True)
 
         try:
-            # Query non-folder, non-trashed files inside the Google Drive folder
+            # Query non-folder, non-trashed files inside the target Google Drive folder
             query = f"'{drive_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
             response = service.files().list(q=query, fields="files(id, name)").execute()
             files = response.get("files", [])
@@ -157,11 +166,11 @@ def sync_from_drive():
                 file_name = file_item["name"]
                 dest_path = os.path.join(local_folder, file_name)
 
-                # Skip file if already exists locally to save bandwidth
+                # Skip downloading if file is already cached locally
                 if os.path.exists(dest_path):
                     continue
 
-                # Download file directly
+                # Stream-download file contents
                 request = service.files().get_media(fileId=file_id)
                 with open(dest_path, "wb") as f:
                     downloader = MediaIoBaseDownload(f, request)
@@ -189,7 +198,7 @@ def sync_from_drive():
 # ==========================================
 
 def find_file_in_folder(folder_path, target_filename):
-    """Recursively searches for target_filename inside folder_path and subdirectories."""
+    """Recursively searches for target_filename inside folder_path."""
     if not os.path.exists(folder_path):
         return None
         
@@ -201,7 +210,7 @@ def find_file_in_folder(folder_path, target_filename):
     return None
 
 def get_filename_pattern(month, year, paper_type, paper_code):
-    """Formats Cambridge PDF file patterns for 8021 (e.g., 8021_w24_in_21)."""
+    """Formats Cambridge PDF file patterns (e.g., 8021_w24_in_21)."""
     short_year = year[-2:]
     month_code = 's' if month == "June" else 'w'
     return f"8021_{month_code}{short_year}_{paper_type}_{paper_code}"
