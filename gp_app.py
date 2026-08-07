@@ -496,23 +496,38 @@ with tab4:
                 st.download_button("📥 Click to Download Document", f, file_name=target, key="dl_docx")
 
 # --- TAB 5: ADMIN CONTROL ---
+# --- TAB 5: ADMIN CONTROL ---
 with tab5:
     st.header("Admin Control Center")
     pwd = st.text_input("Enter Admin Password to access controls", type="password", key="admin_pwd")
+    
     if pwd == ADMIN_PASSWORD:
         st.success("Welcome, Admin.")
-        st.markdown("### 📊 Live System Status")
-        for label, folder in FOLDERS.items():
-            if os.path.exists(folder):
-                pdf_files = []
-                for root, dirs, files in os.walk(folder):
-                    pdf_files.extend([f for f in files if f.lower().endswith('.pdf')])
-                st.write(f"✅ **{label}:** {len(pdf_files)} files synced")
-            else:
-                st.error(f"❌ **{label}:** Folder missing!")
+        
+        st.markdown("### 📊 Live System Status & Drive Links")
+        st.info("Click any button below to open that specific folder directly inside your Google Drive.")
+        
+        # Display each folder status along with a direct button to Google Drive
+        for label, folder_path in FOLDERS.items():
+            drive_id = FOLDER_IDS[folder_path]
+            drive_url = f"https://drive.google.com/drive/folders/{drive_id}"
+            
+            col_status, col_btn = st.columns([3, 2])
+            
+            with col_status:
+                if os.path.exists(folder_path):
+                    pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
+                    st.write(f"✅ **{label}:** {len(pdf_files)} files synced locally")
+                else:
+                    st.error(f"❌ **{label}:** Folder missing!")
+                    
+            with col_btn:
+                # Direct link button to open the Google Drive folder
+                st.link_button(f"📁 Open {label} in Drive", drive_url, use_container_width=True)
+                
     elif pwd:
         st.error("Incorrect Password. Access Denied.")
-
+#######################################################################################################
 # ==========================================
 # 8. FOOTER
 # ==========================================
